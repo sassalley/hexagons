@@ -1,0 +1,174 @@
+---
+title: "Hexagon Mapping Test"
+author: "JBailey"
+date: "19 October 2016"
+output: html_document
+---
+
+```
+#I wanted to create something that would turn any shapefile / geojson into a hexagonal map where each geographical unit (e.g. states) becomes a hexagon. 
+
+I need to optimise the assignment algorithm. 
+I need to optimise the grid size algorith. At the moment they're both greedy and lazy on my part. 
+
+```
+
+```{r setup, include=FALSE}
+library(RColorBrewer) #to use brewer.pal
+library(fields) #to use designer.colors
+```
+
+- Read in geofile
+- Get extent of geofile
+- Specify required number of hexagons needed based on number of units in geofile. 
+- Generate grid of number of points needed within the boundary of the geofile.
+- Assign centroid of original units to closest point in grid (remove that point)
+- Repeat until all centroids are assigned to points. 
+- Add hexagons around points. 
+- Plot and colour accordingly. 
+
+```{r, eval=FALSE}
+library(rgdal)
+library(maptools)
+library(sp)
+library(rgeos)
+
+setwd("~/Documents/Scripts/Tombolo/Indiv_expt/datascience-experiment-hexagon-mapping/data/")
+filename = "London_LSOA"
+f_type = "geojson"
+
+if (f_type == "shapefile"){
+    shape <- readShapeSpatial(filename)
+} else {
+  shape <- readOGR(paste0(filename,".json") , "OGRGeoJSON") }
+
+
+#function find suitable cellsize
+nhex <- length(shape)
+#Start off with guidance but start with bins that are too large (cellsize too large)
+xmax <- summary(shape)[2][[1]][1,2]
+ymax <- summary(shape)[2][[1]][2,2]
+xmin <- summary(shape)[2][[1]][1,1]
+ymin <- summary(shape)[2][[1]][2,1]
+xrange <- (xmax - xmin)
+yrange <- (ymax - ymin)
+start_width <- ifelse(xrange > yrange, xrange, yrange)
+
+#Let's assume that the user want's something more than 4 hexagons wide or long.
+cellsize = start_width / 4
+#At what cellsize is there the correct number of hexagons?
+#TODO: this really should be re-framed as an optimisation. 
+  repeat {
+    # do something
+    HexPts <- spsample(shape, type="hexagonal", cellsize=cellsize) 
+    cellsize = ifelse(abs(nhex - length(HexPts)) > 200, cellsize*0.9,
+                      ifelse(abs(nhex - length(HexPts)) < 10, cellsize*0.999999999999, cellsize*0.999))
+    print(cellsize)
+    print(paste0("Needed = ", nhex))
+    print(paste0("Current = ", length(HexPts)))
+    print(paste0("Difference ", abs(nhex - length(HexPts))))
+    # exit if the condition is met
+    if (abs(nhex - length(HexPts)) < 2){
+      print(paste0("We're close We Need ", nhex, " we have ", length(HexPts), " Cellsize is ", cellsize))}
+    
+    if (nhex < length(HexPts)) {
+       HexPts <- spsample(shape, type="hexagonal", cellsize=cellsize) 
+       cellsize = cellsize*1.00000000001
+    }
+    if (nhex == length(HexPts)) break
+  }
+
+#TODO: If the Current Exceeds Needed then Stop. Rotate By 1 degree. And go down from where you are in very small increments. 
+
+HexPols <- HexPoints2SpatialPolygons(HexPts)
+plot(HexPols[shape,])
+
+
+```
+
+
+Assign the New Hexagons to Their Closest Actual Units
+
+```{r, eval = FALSE}
+# Latest version: Assign closest points from a second point set
+
+   require(sp)
+   
+   originalPoints <- gCentroid(shape,byid=TRUE)  
+   shape@data$CENTROIX <- originalPoints$x
+   shape@data$CENTROIY <- originalPoints$y
+   shape@data$key <- paste0(originalPoints$x, originalPoints$y)
+
+   hexagonPoints <- HexPts
+   HexPts2 <- as.data.frame(HexPts)
+   hexdfid <- rep("NA", times = nhex)
+   for (i in 1:nhex) {hexdfid[i] <- paste0("ID", i)}
+   row.names(HexPts2) <- hexdfid
+   hexpolsdf <- SpatialPolygonsDataFrame(HexPols, data = HexPts2)
+
+   hexpolsdf@data$key2 <- paste0(hexpolsdf@data$x, hexpolsdf@data$y)
+   #validOrigPoints <- originalPoints
+
+#  Define these vectors, used in the loop.
+
+   closestSiteVec <- vector(mode = "numeric",length = length(hexagonPoints))
+   minDistVec     <- vector(mode = "numeric",length = length(hexagonPoints))
+   takenVec       <- vector(mode = "numeric",length = length(hexagonPoints))
+   takenVecIndex <- vector(mode="numeric", length=0) 
+
+
+# Get the vector index of the hexagon centroid closest to each original centroid.
+# Use the spDistsN1 function to compute the distance vector between each
+# original centroid and all of the hexagon centroids. Then, find and
+# retainthe index of the closest hexagon centroid. 
+#
+# spDistsN1 usage: spDistsN1(pointList, pointToMatch, longlat)
+#
+# where:
+#         pointList   : List of candidate points.
+#         pointToMatch: Single point for which we seek the closest point in pointList.
+#         longlat     : TRUE  computes Great Circle distance in km,
+#                       FALSE computes Euclidean distance in units of input geographic coordinates
+#
+# We could use Great Circle distance to increase distance calculation accuracy at high latitudes
+#
+#TODO: Order from smallest to largest. Or randomised.  Or miimise total distance.   
+#
+   for (i in 1 : length(hexagonPoints))
+   {
+      distVec <- spDistsN1(originalPoints,hexagonPoints[i,],longlat = FALSE)
+      minDistVec[i] <- min(distVec)
+      
+      if (i > 1){
+              distVec[takenVecIndex] <- NA
+              closestSiteVec[i] <- which.min(distVec)
+      } else {closestSiteVec[i] <- which.min(distVec)}
+      
+      takenVec[i] <- which.min(distVec)
+      takenVecIndex <- takenVec[takenVec > 0]
+   }
+   
+   print(takenVecIndex)
+
+   PointAssignTemps <- originalPoints[closestSiteVec,]
+   FinalTable = data.frame(coordinates(hexagonPoints), closestSiteVec,minDistVec,PointAssignTemps)
+
+   names(FinalTable) <- c("HexagonX","HexagonY","ClosestSiteVec","MinDist","CENTROIDX", "CENTROIDY")
+   FinalTable$key <- paste0(FinalTable$CENTROIDX, FinalTable$CENTROIDY)
+   combi <- merge(shape@data, FinalTable, by = "key")
+   combi$key2 <- paste0(combi$HexagonX, combi$HexagonY)
+   combi2  <- merge(hexpolsdf, combi, by = "key2")
+
+   
+#Generate colours for the test plotting
+   tombolocs <- c("#ff15a3","#cccccc","#85daef","#006dfe","#0257c5")
+   rbpal <- colorRampPalette(tombolocs)
+   
+#Run a comparison test plot with two columns. 
+   par(mfrow=c(1,2))
+   plot(shape, col = rbpal(16)[as.numeric(cut(shape$HECTARES,breaks = 10))], border = NA, main = "Areas" )
+   text(x = combi2$CENTROIDX, y = combi2$CENTROIDY, labels = combi2$NAME, cex = 0.2)
+   plot(combi2, col = rbpal(16)[as.numeric(cut(combi2$HECTARES,breaks = 10))], border = NA, main = "Areas")
+   text(x = combi2$HexagonX, y = combi2$HexagonY, labels = combi2$NAME, cex = 0.2)
+
+```
