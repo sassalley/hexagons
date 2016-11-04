@@ -92,29 +92,37 @@ Assign the New Hexagons to Their Closest Actual Units
 ```{r, eval = FALSE}
 # Latest version: Assign closest points from a second point set
 
-   require(sp)
-   
+require(sp)
+
+sort = "yes"
+if (sort == "yes") {
+    shape$area <- sapply(1:length(shape), function (x) shape@polygons[[x]]@area)
+    shape <- shape[order(shape$area),]
+    originalPoints <-  gCentroid(shape,byid=TRUE)  
+
+} else {
    originalPoints <- gCentroid(shape,byid=TRUE)  
-   shape@data$CENTROIX <- originalPoints$x
-   shape@data$CENTROIY <- originalPoints$y
-   shape@data$key <- paste0(originalPoints$x, originalPoints$y)
+   }
 
-   hexagonPoints <- HexPts
-   HexPts2 <- as.data.frame(HexPts)
-   hexdfid <- rep("NA", times = nhex)
-   for (i in 1:nhex) {hexdfid[i] <- paste0("ID", i)}
-   row.names(HexPts2) <- hexdfid
-   hexpolsdf <- SpatialPolygonsDataFrame(HexPols, data = HexPts2)
+shape@data$CENTROIX <- originalPoints$x
+shape@data$CENTROIY <- originalPoints$y
+shape@data$key <- paste0(originalPoints$x, originalPoints$y)
 
-   hexpolsdf@data$key2 <- paste0(hexpolsdf@data$x, hexpolsdf@data$y)
-   #validOrigPoints <- originalPoints
+hexagonPoints <- HexPts
+HexPts2 <- as.data.frame(HexPts)
+hexdfid <- rep("NA", times = nhex)
+for (i in 1:nhex) {hexdfid[i] <- paste0("ID", i)}
+row.names(HexPts2) <- hexdfid
+hexpolsdf <- SpatialPolygonsDataFrame(HexPols, data = HexPts2)
+
+hexpolsdf@data$key2 <- paste0(hexpolsdf@data$x, hexpolsdf@data$y)
 
 #  Define these vectors, used in the loop.
 
-   closestSiteVec <- vector(mode = "numeric",length = length(hexagonPoints))
-   minDistVec     <- vector(mode = "numeric",length = length(hexagonPoints))
-   takenVec       <- vector(mode = "numeric",length = length(hexagonPoints))
-   takenVecIndex <- vector(mode="numeric", length=0) 
+ closestSiteVec <- vector(mode = "numeric",length = length(hexagonPoints))
+ minDistVec     <- vector(mode = "numeric",length = length(hexagonPoints))
+ takenVec       <- vector(mode = "numeric",length = length(hexagonPoints))
+ takenVecIndex <- vector(mode="numeric", length=0) 
 
 
 # Get the vector index of the hexagon centroid closest to each original centroid.
@@ -134,6 +142,8 @@ Assign the New Hexagons to Their Closest Actual Units
 #
 #TODO: Order from smallest to largest. Or randomised.  Or miimise total distance.   
 #
+
+
    for (i in 1 : length(hexagonPoints))
    {
       distVec <- spDistsN1(originalPoints,hexagonPoints[i,],longlat = FALSE)
@@ -148,27 +158,27 @@ Assign the New Hexagons to Their Closest Actual Units
       takenVecIndex <- takenVec[takenVec > 0]
    }
    
-   print(takenVecIndex)
+print(takenVecIndex)
 
-   PointAssignTemps <- originalPoints[closestSiteVec,]
-   FinalTable = data.frame(coordinates(hexagonPoints), closestSiteVec,minDistVec,PointAssignTemps)
+PointAssignTemps <- originalPoints[closestSiteVec,]
+FinalTable = data.frame(coordinates(hexagonPoints), closestSiteVec,minDistVec,PointAssignTemps)
 
-   names(FinalTable) <- c("HexagonX","HexagonY","ClosestSiteVec","MinDist","CENTROIDX", "CENTROIDY")
-   FinalTable$key <- paste0(FinalTable$CENTROIDX, FinalTable$CENTROIDY)
-   combi <- merge(shape@data, FinalTable, by = "key")
-   combi$key2 <- paste0(combi$HexagonX, combi$HexagonY)
-   combi2  <- merge(hexpolsdf, combi, by = "key2")
+names(FinalTable) <- c("HexagonX","HexagonY","ClosestSiteVec","MinDist","CENTROIDX", "CENTROIDY")
+FinalTable$key <- paste0(FinalTable$CENTROIDX, FinalTable$CENTROIDY)
+combi <- merge(shape@data, FinalTable, by = "key")
+combi$key2 <- paste0(combi$HexagonX, combi$HexagonY)
+combi2  <- merge(hexpolsdf, combi, by = "key2")
 
-   
+
 #Generate colours for the test plotting
-   tombolocs <- c("#ff15a3","#cccccc","#85daef","#006dfe","#0257c5")
-   rbpal <- colorRampPalette(tombolocs)
-   
+tombolocs <- c("#ff15a3","#cccccc","#85daef","#006dfe","#0257c5")
+rbpal <- colorRampPalette(tombolocs)
+
 #Run a comparison test plot with two columns. 
-   par(mfrow=c(1,2))
-   plot(shape, col = rbpal(16)[as.numeric(cut(shape$HECTARES,breaks = 10))], border = NA, main = "Areas" )
-   text(x = combi2$CENTROIDX, y = combi2$CENTROIDY, labels = combi2$NAME, cex = 0.2)
-   plot(combi2, col = rbpal(16)[as.numeric(cut(combi2$HECTARES,breaks = 10))], border = NA, main = "Areas")
-   text(x = combi2$HexagonX, y = combi2$HexagonY, labels = combi2$NAME, cex = 0.2)
+par(mfrow=c(1,2))
+plot(shape, col = rbpal(16)[as.numeric(cut(shape$HECTARES,breaks = 10))], border = NA, main = "Areas" )
+text(x = combi2$CENTROIDX, y = combi2$CENTROIDY, labels = combi2$NAME, cex = 0.2)
+plot(combi2, col = rbpal(16)[as.numeric(cut(combi2$HECTARES,breaks = 10))], border = NA, main = "Areas")
+text(x = combi2$HexagonX, y = combi2$HexagonY, labels = combi2$NAME, cex = 0.2)
 
 ```
