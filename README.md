@@ -6,8 +6,8 @@ As of 2016-05-09: This experiment is [ongoing]
 
 ## Contributors
 
-JBailey
-KLovelace
+- JBailey
+- KLovelace
 
 ## Description
 
