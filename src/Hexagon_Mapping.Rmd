@@ -33,18 +33,22 @@ library(maptools)
 library(sp)
 library(rgeos)
 
-setwd("~/Documents/Scripts/Tombolo/Indiv_expt/datascience-experiment-hexagon-mapping/data/")
-filename = "London_LSOA"
+prefix = "../data/"
+filename = "London_LA"
 f_type = "geojson"
+#f_type = "shapefile"
+
 
 if (f_type == "shapefile"){
-    shape <- readShapeSpatial(filename)
+    shape <- readOGR(paste0(prefix,filename))
 } else {
-  shape <- readOGR(paste0(filename,".json") , "OGRGeoJSON") }
+  shape <- readOGR(paste0(prefix,filename,".json") , "OGRGeoJSON") }
 
+shape@proj4string <- CRS(as.character(NA))
 
 #function find suitable cellsize
 nhex <- length(shape)
+
 #Start off with guidance but start with bins that are too large (cellsize too large)
 xmax <- summary(shape)[2][[1]][1,2]
 ymax <- summary(shape)[2][[1]][2,2]
@@ -55,6 +59,7 @@ yrange <- (ymax - ymin)
 start_width <- ifelse(xrange > yrange, xrange, yrange)
 
 #Let's assume that the user want's something more than 4 hexagons wide or long.
+#If they want something this small then a hexmap is probably not worth it.
 cellsize = start_width / 4
 #At what cellsize is there the correct number of hexagons?
 #TODO: this really should be re-framed as an optimisation. 
@@ -116,11 +121,18 @@ Assign the New Hexagons to Their Closest Actual Units
    takenVec       <- vector(mode = "numeric",length = length(hexagonPoints))
    takenVecIndex <- vector(mode="numeric", length=0) 
 
+   
+#If we want to prioritise this by area then we need to know the area of each shape.
+sapply(shape@polygons, function(x) x@area)
+
+## For areas, rgeos::gArea() or geosphere::areaPolygons() are generally more appropriate
+## (Note, for instance, that it properly accounts for the hole in the 3rd polygon.)
+sizes <- rgeos::gArea(shape, byid=TRUE)
 
 # Get the vector index of the hexagon centroid closest to each original centroid.
 # Use the spDistsN1 function to compute the distance vector between each
 # original centroid and all of the hexagon centroids. Then, find and
-# retainthe index of the closest hexagon centroid. 
+# retain the index of the closest hexagon centroid. 
 #
 # spDistsN1 usage: spDistsN1(pointList, pointToMatch, longlat)
 #
@@ -133,9 +145,15 @@ Assign the New Hexagons to Their Closest Actual Units
 # We could use Great Circle distance to increase distance calculation accuracy at high latitudes
 #
 #TODO: Order from smallest to largest. Or randomised.  Or miimise total distance.   
-#
+plan = "sm"
+#plan = ""
+     
    for (i in 1 : length(hexagonPoints))
    {
+     
+     if (plan == "sm") {i <- order(sizes)[i]}
+       
+       
       distVec <- spDistsN1(originalPoints,hexagonPoints[i,],longlat = FALSE)
       minDistVec[i] <- min(distVec)
       
@@ -167,8 +185,8 @@ Assign the New Hexagons to Their Closest Actual Units
 #Run a comparison test plot with two columns. 
    par(mfrow=c(1,2))
    plot(shape, col = rbpal(16)[as.numeric(cut(shape$HECTARES,breaks = 10))], border = NA, main = "Areas" )
-   text(x = combi2$CENTROIDX, y = combi2$CENTROIDY, labels = combi2$NAME, cex = 0.2)
+   text(x = combi2$CENTROIDX, y = combi2$CENTROIDY, labels = combi2$NAME, cex = 0.5)
    plot(combi2, col = rbpal(16)[as.numeric(cut(combi2$HECTARES,breaks = 10))], border = NA, main = "Areas")
-   text(x = combi2$HexagonX, y = combi2$HexagonY, labels = combi2$NAME, cex = 0.2)
-
+   text(x = combi2$HexagonX, y = combi2$HexagonY, labels = combi2$NAME, cex = 0.5)
+   
 ```
