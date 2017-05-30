@@ -17,9 +17,10 @@ This document summarises the initial methodology used in creating an open data c
 
 - Add optimisation
 - Add alternate assignment algothrithms
-	- Assign with smallest area first
+	- Assign with smallest area first - done
 	- Split space and assign based on sub-groups
 	- Use graph based approach?
+	- Spiral outward?
 
 	
 	 
