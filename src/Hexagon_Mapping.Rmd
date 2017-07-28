@@ -61,6 +61,7 @@ start_width <- ifelse(xrange > yrange, xrange, yrange)
 #Let's assume that the user want's something more than 4 hexagons wide or long.
 #If they want something this small then a hexmap is probably not worth it.
 cellsize = start_width / 4
+
 #At what cellsize is there the correct number of hexagons?
 #TODO: this really should be re-framed as an optimisation. 
   repeat {
@@ -72,6 +73,7 @@ cellsize = start_width / 4
     print(paste0("Needed = ", nhex))
     print(paste0("Current = ", length(HexPts)))
     print(paste0("Difference ", abs(nhex - length(HexPts))))
+    
     # exit if the condition is met
     if (abs(nhex - length(HexPts)) < 2){
       print(paste0("We're close We Need ", nhex, " we have ", length(HexPts), " Cellsize is ", cellsize))}
@@ -96,8 +98,10 @@ Assign the New Hexagons to Their Closest Actual Units
 
 ```{r, eval = FALSE}
 # Latest version: Assign closest points from a second point set
-
-   require(sp)
+  library(Rcpp)
+  library(RcppArmadillo)
+  require(sp)
+  sourceCpp("2013-09-24-minimal-assignment.cpp")
    
    originalPoints <- gCentroid(shape,byid=TRUE)  
    shape@data$CENTROIX <- originalPoints$x
@@ -112,6 +116,8 @@ Assign the New Hexagons to Their Closest Actual Units
    hexpolsdf <- SpatialPolygonsDataFrame(HexPols, data = HexPts2)
 
    hexpolsdf@data$key2 <- paste0(hexpolsdf@data$x, hexpolsdf@data$y)
+   costmatrix <- spDists(originalPoints, hexagonPoints, longlat = FALSE)
+   hungarian_costmin <- hungarian_cc(costmatrix)
    #validOrigPoints <- originalPoints
 
 #  Define these vectors, used in the loop.
@@ -129,30 +135,17 @@ sapply(shape@polygons, function(x) x@area)
 ## (Note, for instance, that it properly accounts for the hole in the 3rd polygon.)
 sizes <- rgeos::gArea(shape, byid=TRUE)
 
-# Get the vector index of the hexagon centroid closest to each original centroid.
-# Use the spDistsN1 function to compute the distance vector between each
-# original centroid and all of the hexagon centroids. Then, find and
-# retain the index of the closest hexagon centroid. 
-#
-# spDistsN1 usage: spDistsN1(pointList, pointToMatch, longlat)
-#
-# where:
-#         pointList   : List of candidate points.
-#         pointToMatch: Single point for which we seek the closest point in pointList.
-#         longlat     : TRUE  computes Great Circle distance in km,
-#                       FALSE computes Euclidean distance in units of input geographic coordinates
-#
-# We could use Great Circle distance to increase distance calculation accuracy at high latitudes
-#
-#TODO: Order from smallest to largest. Or randomised.  Or miimise total distance.   
-plan = "sm"
-#plan = ""
+#TODO: plan = "" (equals gridwise systematic from bottom left) Order from smallest to largest. Or randomised.  Or miimise total distance.   
+#plan = "sm"
+#plan = 
+plan = ""
      
    for (i in 1 : length(hexagonPoints))
    {
      
-     if (plan == "sm") {i <- order(sizes)[i]}
-       
+     if (plan == "sm") {
+      i <- order(sizes)[i]
+      }
        
       distVec <- spDistsN1(originalPoints,hexagonPoints[i,],longlat = FALSE)
       minDistVec[i] <- min(distVec)
@@ -160,11 +153,17 @@ plan = "sm"
       if (i > 1){
               distVec[takenVecIndex] <- NA
               closestSiteVec[i] <- which.min(distVec)
+              
       } else {closestSiteVec[i] <- which.min(distVec)}
       
       takenVec[i] <- which.min(distVec)
       takenVecIndex <- takenVec[takenVec > 0]
+      
+       if (plan == "hungarian"){
+    }
    }
+
+   
    
    print(takenVecIndex)
 
