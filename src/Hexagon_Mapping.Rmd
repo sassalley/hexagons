@@ -67,8 +67,7 @@ cellsize = start_width / 4
   repeat {
     # do something
     HexPts <- spsample(shape, type="hexagonal", cellsize=cellsize) 
-    cellsize = ifelse(abs(nhex - length(HexPts)) > 200, cellsize*0.9,
-                      ifelse(abs(nhex - length(HexPts)) < 10, cellsize*0.999999999999, cellsize*0.999))
+    cellsize = ifelse(abs(nhex - length(HexPts)) > 200, cellsize*0.9, ifelse(abs(nhex - length(HexPts)) < 10, cellsize*0.999999999999, cellsize*0.999))
     print(cellsize)
     print(paste0("Needed = ", nhex))
     print(paste0("Current = ", length(HexPts)))
@@ -89,6 +88,24 @@ cellsize = start_width / 4
 
 HexPols <- HexPoints2SpatialPolygons(HexPts)
 plot(HexPols[shape,])
+
+
+min.diff <- function(par) {
+            HexPts <- spsample(shape, type="hexagonal", cellsize=5000) 
+            abs(33 - length(HexPts))
+            }
+
+result <- optimise(c(5000, cellsize), lower = 5000, upper = cellsize, f = min.diff,  maximum = FALSE)
+
+
+system.time(
+result <- optim(par = 7000 ,fn = min.diff ,method = "SANN"))
+
+system.time(
+result <- optim(par = 7000 ,fn = min.diff ,method = "CG"))
+
+system.time(
+result <- optim(par = 7000 ,fn = min.diff ,method = "BFGS"))
 
 
 ```
@@ -137,7 +154,7 @@ sizes <- rgeos::gArea(shape, byid=TRUE)
 
 #TODO: plan = "" (equals gridwise systematic from bottom left) Order from smallest to largest. Or randomised.  Or miimise total distance.   
 #plan = "sm"
-#plan = 
+#plan = "hungarian"
 plan = ""
      
    for (i in 1 : length(hexagonPoints))
